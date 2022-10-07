@@ -5,9 +5,9 @@
 	else if(typeof define === 'function' && define.amd)
 		define([], factory);
 	else if(typeof exports === 'object')
-		exports["DirectCallSDK"] = factory();
+		exports["SignedCallSDK"] = factory();
 	else
-		root["DirectCallSDK"] = factory();
+		root["SignedCallSDK"] = factory();
 })(this, function() {
 return /******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
@@ -28045,20 +28045,14 @@ function initCallSock() {
       autoReconnect: true,
       autoConnect: true,
       transports: ["websocket"],
-      query: {
-        jwt: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.jwt,
-      },
+      
     };
     let authData = {
       platform: 'web',
       accountId: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.accountId,
-      apikey: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.apikey,
-      cc: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.user.cc,
-      phone: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.user.phone,
       cuid: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cuid,
       callId: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callId,
-      cli: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cli,
-      initiator: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.isInitiator,
+      callJwt: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken,
     };
     callsock
       .init(_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockHost, options, authData)
@@ -28119,6 +28113,7 @@ class CallSock {
           this.initHandlers(authdata, resolve, reject)
         }
       } catch (err) {
+        console.log(err)
         reject(err)
       }
     })
@@ -28145,7 +28140,6 @@ class CallSock {
       _self.socket.emit('authentication', authData)
       let authListener = () => {
         _self.connected = true
-        // logger({ payload: "this is hit on initHandlers" }, true)
         if (this.reconnectAttempts > 0) {
           if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.sipRegistered) {
             _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('callVoip', !_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callVoip)
@@ -28163,7 +28157,9 @@ class CallSock {
       let unauthListener = (error) => {
         _self.connected = false
         _self.disconnect()
-        reject(error)
+        // reject(error)
+        console.log("some error occured", error)
+        _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('hangup', !_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.hangup)
       }
       _self.socket.once('authenticated', authListener)
       _self.socket.once('unauthorized', unauthListener)
@@ -28369,15 +28365,14 @@ class SIP {
    * more info - https://jssip.net/documentation/3.2.x/api/ua/#section_instantiation
    */
   initUa() {
-    let initiator;
+    let sipUser;
     if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cuid.length > 0) {
-      initiator = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cuid;
+      sipUser = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cuid;
     } else if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cc.length > 0 && _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.phone.length > 0) {
-      initiator = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cc + _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.phone;
+      sipUser = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cc + _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.phone;
     }
-    let uri = new (jssip__WEBPACK_IMPORTED_MODULE_0___default().URI)("sip", initiator, _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockHost);
+    let uri = new (jssip__WEBPACK_IMPORTED_MODULE_0___default().URI)("sip", _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.accountId+ '_' + sipUser , _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockHost);
     uri = uri.toAor();
-
     if (this.ua !== undefined) {
       this.ua.set('password', _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockPassword)
     } else {
@@ -28493,8 +28488,8 @@ class SIP {
       if (!audioSink) {
         audioSink = document.createElement('audio')
         audioSink.id = 'audioSink'
-        audioSink.classList.add("dc__ong--hide");
-        document.getElementById('dc__sdk').appendChild(audioSink)
+        audioSink.classList.add("sc__ong--hide");
+        document.getElementById('sc__sdk').appendChild(audioSink)
       } else {
         try {
           audioSink.pause();
@@ -28514,7 +28509,7 @@ class SIP {
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit("setOngoingCallEvents", !_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.setOngoingCallEvents)
       // toggle state value to fire subscriber's callback
       if (!_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockReconnectAttempt > 0) {
-        let callTimer = new _libs_timer__WEBPACK_IMPORTED_MODULE_4__["default"]('dc__sdk--timer');
+        let callTimer = new _libs_timer__WEBPACK_IMPORTED_MODULE_4__["default"]('sc__sdk--timer');
         callTimer.startTimer()
       }
       audioSink.play();
@@ -28594,10 +28589,10 @@ function connectSigSock() {
     let authData = {
       platform: 'web',
       accountId: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.accountId,
-      apikey: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.apikey,
       cc: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cc,
       phone: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.phone,
       cuid: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.cuid,
+      signallingJwt: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.sigsockToken
     };
     let options = {
       reconnectionDelay: 1500,
@@ -28606,12 +28601,10 @@ function connectSigSock() {
       autoReconnect: true,
       autoConnect: true,
       transports: ["websocket"],
-      query: {
-        jwt: _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.jwt,
-      },
+      
     };
     sigsock
-      .init(_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.sigsockhost, options, authData)
+      .init(_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.sna, options, authData)
       .then(() => {
         resolve(sigsock)
       })
@@ -28650,7 +28643,6 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-
 /**
  * @param this - DirectCallClient
  */
@@ -28679,6 +28671,7 @@ function setupSigsockCustomEventHandlers() {
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('mute', false)
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setIsMuted', _utils_constants__WEBPACK_IMPORTED_MODULE_0__.MuteStates.UNMUTE)
       this.sigsock.incomingcall = data;
+      _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setCallsockToken', data.callJwt)
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setCallId', data.call)
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setContext', data.context)
       _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setCallsockHost', data.host)
@@ -28727,25 +28720,45 @@ function setupSigsockCustomEventHandlers() {
    * the user is receiving / has answered a PSTN call on his phone
    */
   this.sigsock.socket.on("hold-unhold", (data) => {
+    let cssId = 'hold_unhold_css'
     if (data.hold === true) {
+      // change height of the container
+      let css = `
+        #sc__sdk {
+          height: 365px;
+        }
+      `
+      // add the style to webpage
+      if (!document.getElementById(cssId)) {
+        let head = document.getElementsByTagName('head')[0]
+        let cssBlock = document.createElement('style')
+        cssBlock.setAttribute('id', cssId)
+        cssBlock.innerHTML = css
+        head.appendChild(cssBlock)
+      }
       if (document.getElementsByClassName("hold__text")) {
         document
           .getElementsByClassName("hold__text")[0]
-          .classList.remove("dc__hide");
+          .classList.remove("sc__hide");
         _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('mute', true)
       }
     } else if (data.hold === false) {
+      let elem = document.getElementById(cssId)
+      if (elem) {
+        elem.remove()
+      }
       this.hold = false;
       if (
         !document
           .getElementsByClassName("hold__text")[0]
-          .classList.contains("dc__hide")
+          .classList.contains("sc__hide")
       ) {
         document
           .getElementsByClassName("hold__text")[0]
-          .classList.add("dc__hide");
+          .classList.add("sc__hide");
         _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('mute', false)
       }
+
     }
     return
   });
@@ -28898,6 +28911,9 @@ class SigSock {
         callId: this.incomingcall.call,
         sid: this.incomingcall.sid
       }
+      if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken) {
+        data.callJwt = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken
+      }
       this.socket.emit("answer", data, response => {
         _store__WEBPACK_IMPORTED_MODULE_1__["default"].commit('setCanDeclineCall', true)
         if (!response.status) {
@@ -28932,27 +28948,17 @@ class SigSock {
     // user can't decline a call when its already being answered
 
     let _self = this
-    let data
-    if (callData) {
-      data = {
-        responseSid: callData.from.id + '_' + accountId,
-        callId: callData.call,
-        sid: callData.sid,
-      }
-    } else {
-      data = {
-        responseSid: this.incomingcall.from.id + '_' + accountId,
-        callId: this.incomingcall.call,
-        sid: this.incomingcall.sid
-      }
-    }
+    let data = {callId: this.incomingcall.call,}
+    
     // if the receiver is already busy, decline the call with user busy
     if (!reason) {
       if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.isBusy) {
         data.reason = 'User Busy',
           data.reasonCode = 1001
       }
-
+    }
+    if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken) {
+      data.callJwt = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken
     }
     return new Promise((resolve, reject) => {
       this.socket.emit("decline", data, response => {
@@ -28980,7 +28986,10 @@ class SigSock {
     let data = {
       responseSid: this.incomingcall.from.id + '_' + accountId,
       callId: this.incomingcall.call,
-      sid: this.incomingcall.sid
+      // sid: this.incomingcall.sid
+    }
+    if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken) {
+      data.callJwt = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken
     }
     return new Promise((resolve, reject) => {
       this.socket.emit("miss", data, response => {
@@ -28996,8 +29005,14 @@ class SigSock {
   }
 
   cancel(callId) {
+    let data = {
+      callId
+    }
+    if (_store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken) {
+      data.callJwt = _store__WEBPACK_IMPORTED_MODULE_1__["default"].state.callsockToken
+    }
     return new Promise((resolve, reject) => {
-      this.socket.emit("cancel", callId, response => {
+      this.socket.emit("cancel", data, response => {
         if (response) {
           if (response.error) {
             reject(response.error)
@@ -29154,30 +29169,21 @@ async function getBaseUrl(accountId, apikey, region = "eu1") {
 
 }
 
-async function signin(
-  { accountId,
-    apikey,
-    guid,
-    ctAccountId,
-    phone,
-    cc,
-    cuid,
-    name }
-) {
+async function signin({...params}) {
   let Api = new _api__WEBPACK_IMPORTED_MODULE_0__["default"]();
+  let payload = {
+    ...params, 
+    platform: 'web',
+  }
+  let jwt = window.localStorage.getItem('jwt')
+  // if (jwt) {
+  //   payload.jwt = jwt
+  // }
+  payload.jwt = jwt || ""
+
   let res = await Api.post(
-    `accounts/${accountId}/contacts/signin`,
-    {
-      cc,
-      phone,
-      cuid,
-      accountId,
-      platform: 'web',
-      name,
-      apikey,
-      ctAccountId,
-      guid
-    },
+    `accounts/${params.accountId}/contacts/signin`,
+    payload,
     {
       "Content-type": "application/json",
     }
@@ -29191,8 +29197,8 @@ async function signin(
     }
     throw res.error
   }
-  if (res && res.accessToken) {
-    window.localStorage.setItem('act', res.accessToken)
+  if (res && res.jwt && res.jwt!=={}) {
+    window.localStorage.setItem('jwt', res.jwt)
   }
   return res
 
@@ -29302,10 +29308,10 @@ const MUTATIONS = {
     }
   },
 
-  setAuthResponse: function (state, { branding, jwt, user, sigsockhost, clis, templates }) {
+  setAuthResponse: function (state, { branding, jwt, user, sna, clis, templates }) {
     return {
       ...state, ...{
-        branding, jwt, user, sigsockhost, clis, templates
+        branding, jwt, user, sna, clis, templates
       }
     }
   },
@@ -29403,8 +29409,13 @@ const MUTATIONS = {
   // definte state of sipsession's mute or unmute
   setIsMuted: function (state, payload) {
     return { ...state, isMuted: payload }
+  },
+  setSigsockToken: function (state, payload) {
+    return {...state, sigsockToken: payload}
+  },
+  setCallsockToken: function (state, payload) {
+    return {...state, callsockToken: payload}
   }
-
 }
 
 /***/ }),
@@ -29498,7 +29509,7 @@ const STATE = {
   name: undefined,
   callId: undefined,
   incomingcall: undefined,
-  sigsockhost: undefined,
+  sna: undefined,
   branding: undefined,
   // maintains busy state of the sdk. Used to decline incoming call if already busy on a call. 
   isBusy: false,
@@ -29532,7 +29543,9 @@ const STATE = {
   callsockReconnectAttempt: 0,
   // confirmed state of rtcSession mute
   // mute states can be found in constatns.js
-  isMuted: _utils_constants__WEBPACK_IMPORTED_MODULE_0__.MuteStates.UNMUTE
+  isMuted: _utils_constants__WEBPACK_IMPORTED_MODULE_0__.MuteStates.UNMUTE,
+  sigsockToken: undefined,
+  callsockToken: undefined
 }
 
 /***/ }),
@@ -29639,21 +29652,21 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "renderCallModal": () => (/* binding */ renderCallModal)
 /* harmony export */ });
 const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
-  let html = `<div id="dc__sdk">
-      <p id="dc__sdk--header">${title}</p>
-        <div class="dc__sdk--brand">
-          <img src="${participantImage ? participantImage : logo ? logo : ""}" class="${participantImage ? "dc__sdk--participantImage" : "dc__sdk--logo"}">
+  let html = `<div id="sc__sdk">
+      <p id="sc__sdk--header">${title}</p>
+        <div class="sc__sdk--brand">
+          <img src="${participantImage ? participantImage : logo ? logo : ""}" class="${participantImage ? "sc__sdk--participantImage" : "sc__sdk--logo"}">
         </div>
-      <p id="dc__sdk--timer" class="dc__hide">00:00:00</p>
-      <div id="dc__callactions"></div>
-      <audio id="audioSink" class="dc__ong--hide"></audio>
+      <p id="sc__sdk--timer" class="sc__hide">00:00:00</p>
+      <div id="sc__callactions"></div>
+      <audio id="audioSink" class="sc__ong--hide"></audio>
       </div>
       `
 
 
   let css = `
   @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
-  #dc__sdk{
+  #sc__sdk{
       width: 134px;
       display: flex;
       justify-content: flex-start;
@@ -29671,11 +29684,11 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
       z-index: 999999;
       font-family: 'Roboto', sans-serif;
     }
-    .dc__hide {
+    .sc__hide {
       display: none;
     }
 
-    #dc__sdk--header {
+    #sc__sdk--header {
       margin: 20px 0 5px 0;
       font-style: normal;
       font-weight: 600;
@@ -29686,13 +29699,13 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
       color: ${color};
     }
 
-    .dc__sdk--brand {
+    .sc__sdk--brand {
       width: 88px;
       height: 66px;
       margin: 0 0 4px 0;
     }
 
-    .dc__sdk--participantImage {
+    .sc__sdk--participantImage {
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -29700,14 +29713,14 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
       margin: 0 auto;
     }
 
-    .dc__sdk--logo {
+    .sc__sdk--logo {
       width: 60px;
       height: 60px;
       display: block;
       margin: 0 auto;
     }
 
-    #dc__sdk--timer {
+    #sc__sdk--timer {
       font-style: normal;
       font-weight: 600;
       font-size: 14px;
@@ -29719,7 +29732,7 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
 
     }
     
-    #dc__callactions {
+    #sc__callactions {
       display: inherit;
       justify-content: inherit;
       align-items: inherit;
@@ -29728,7 +29741,7 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
     
     `
 
-  let callElem = document.getElementById('dc-sdk')
+  let callElem = document.getElementById('sc-sdk')
 
   if (!callElem) {
     throw new Error("Container block for calling views is missing.")
@@ -29745,14 +29758,14 @@ const renderCallModal = (title, { logo, bgColor, color }, participantImage) => {
 }
 
 const changeCallModalTitle = (title) => {
-  let elem = document.getElementById('dc__sdk--header')
+  let elem = document.getElementById('sc__sdk--header')
   if (elem) {
     elem.innerText = title
   }
 }
 
 const clearCallModal = () => {
-  let callModal = document.getElementById('dc__sdk')
+  let callModal = document.getElementById('sc__sdk')
   if (callModal) {
     callModal.remove()
   }
@@ -29853,7 +29866,7 @@ const renderIncomingCall = ({ color }, context) => {
   color = color || "#ffffff"
   let css = `
 
-    #dc--call_context{
+    #sc--call_context{
       font-style: normal;
       font-weight: 600;
       font-size: 14px;
@@ -29864,7 +29877,7 @@ const renderIncomingCall = ({ color }, context) => {
       color: ${color};
     }
 
-    .dc__inc--decline, .dc__inc--answer {
+    .sc__inc--decline, .sc__inc--answer {
       width: 40px;
       height: 40px;
       border-radius: 50%;
@@ -29873,29 +29886,29 @@ const renderIncomingCall = ({ color }, context) => {
       color: ${color};
       margin-left: 8px;
     }
-    .dc__inc--decline {
+    .sc__inc--decline {
       background-color: ${declineColor}
     }
 
-    .dc__inc--answer  {
+    .sc__inc--answer  {
       background-color: ${acceptColor}
     }
 
 
-    .dc__inc--decline>svg {
+    .sc__inc--decline>svg {
       position: absolute;
       top: 11px;
       left: 10px;
     }
 
-    .dc__inc--answer>svg {
+    .sc__inc--answer>svg {
       position: absolute;
       top: 13px;
       left: 12px;
       transform: rotate(372deg);
     }
 
-    .dc__inc--actiontext {
+    .sc__inc--actiontext {
       font-style: normal;
       font-weight: 600;
       font-size: 14px;
@@ -29907,7 +29920,7 @@ const renderIncomingCall = ({ color }, context) => {
       margin-left: 5px;
     }
 
-    #dc__incoming--answer {
+    #sc__incoming--answer {
       margin: 5px auto 10px 5px;
     }
     `
@@ -29915,27 +29928,27 @@ const renderIncomingCall = ({ color }, context) => {
   
 
   let html = `
-  <p id="dc--call_context">${context}</p>
-  <div id="dc__inc--answer--container">
-    <div class="dc__inc--answer">
+  <p id="sc--call_context">${context}</p>
+  <div id="sc__inc--answer--container">
+    <div class="sc__inc--answer">
         ${_icons__WEBPACK_IMPORTED_MODULE_0__.answerIcon}
     </div>
-    <p class="dc__inc--actiontext" id="dc__incoming--answer">Answer</p>
+    <p class="sc__inc--actiontext" id="sc__incoming--answer">Answer</p>
   </div>
   <div>
-  <div id="dc__inc--decline--container">
-    <div class="dc__inc--decline">
+  <div id="sc__inc--decline--container">
+    <div class="sc__inc--decline">
         ${_icons__WEBPACK_IMPORTED_MODULE_0__.hangupIcon}
     </div>
-    <p class="dc__inc--actiontext">Decline</p>
+    <p class="sc__inc--actiontext">Decline</p>
   </div>
      `
 
-  let elem = document.getElementById('dc__callactions')
+  let elem = document.getElementById('sc__callactions')
   if (!elem) {
     throw new Error("Cannot find the required element for call dialog rendering")
   }
-  let cssId = 'dc--incoming__screen'
+  let cssId = 'sc--incoming__screen'
   if (!document.getElementById(cssId)) {
     let cssBlock = document.createElement('style')
     cssBlock.setAttribute('id', cssId)
@@ -29956,10 +29969,10 @@ const renderIncomingCall = ({ color }, context) => {
 
 function addIncomingCallHandlers(answerHandler, declineHandler) {
   document
-    .getElementById("dc__inc--answer--container")
+    .getElementById("sc__inc--answer--container")
     .addEventListener("click", answerHandler);
   document
-    .getElementById("dc__inc--decline--container")
+    .getElementById("sc__inc--decline--container")
     .addEventListener("click", declineHandler);
 }
 
@@ -29982,7 +29995,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
+const renderOngoingScreen = ({ color, buttonTheme }) => {
 
   _store__WEBPACK_IMPORTED_MODULE_0__["default"].events.subscribe('sipRegistered', data => {
     if (!data) {
@@ -29994,25 +30007,25 @@ const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
 
   color = color || "#ffffff"
   let css = `
-    #dc__ong--mute {
+    #sc__ong--mute {
       cursor: pointer;
     }
-    #dc__ong--unmute {
+    #sc__ong--unmute {
       cursor: pointer;
     }
 
-    .dc__inactive {
+    .sc__inactive {
       opacity: 50%;
       cursor: wait
     }
-    #dc__ong--mute>svg, #dc__ong--unmute>svg {
+    #sc__ong--mute>svg, #sc__ong--unmute>svg {
       display: block;
       margin: 0 auto;
       width: 40px;
       height: 40px;
     }
 
-    .dc__ong--mutetext {
+    .sc__ong--mutetext {
       ffont-family: 'Roboto', sans-serif;
       font-style: normal;
       font-weight: 600;
@@ -30024,7 +30037,7 @@ const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
       margin: 4px auto 12px auto
     }
 
-    .dc__ong--hangup {
+    .sc__ong--hangup {
       width: 40px;
       height: 40px;
       border-radius: 50%;
@@ -30034,13 +30047,13 @@ const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
       margin: 12px auto auto auto;
     }
 
-    .dc__ong--hangup>svg {
+    .sc__ong--hangup>svg {
       position: absolute;
       top: 11px;
       left: 10px;
     }
 
-    .dc__ong--hanguptext {
+    .sc__ong--hanguptext {
       font-style: normal;
       font-weight: 600;
       font-size: 14px;
@@ -30056,36 +30069,36 @@ const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
       color: ${color}
     }
 
-    .dc__hide {
+    .sc__hide {
       display: none;
     }
   `
 
   let html = `
-      <div id="dc__ong">
-      <p class="hold__text dc__hide">The user has put you on hold</p>
-      <div id="dc__mute_container" class="dc__inactive">
-        <div id="dc__ong--unmute" class="dc__hide">
+      <div id="sc__ong">
+      <p class="hold__text sc__hide">The user has put you on hold</p>
+      <div id="sc__mute_container" class="sc__inactive">
+        <div id="sc__ong--unmute" class="sc__hide">
         ${buttonTheme === 'light' ? _icons__WEBPACK_IMPORTED_MODULE_1__.muteLight : _icons__WEBPACK_IMPORTED_MODULE_1__.muteDark}
-          <p class="dc__ong--mutetext">Unmute</p>
+          <p class="sc__ong--mutetext">Unmute</p>
         </div>
-        <div id="dc__ong--mute">
+        <div id="sc__ong--mute">
           ${buttonTheme === 'light' ? _icons__WEBPACK_IMPORTED_MODULE_1__.unmuteLight : _icons__WEBPACK_IMPORTED_MODULE_1__.unmuteDark}
-          <p class="dc__ong--mutetext">Mute</p>
+          <p class="sc__ong--mutetext">Mute</p>
         </div>
       </div>
-      <div id="dc__ong--hangup--container" class="dc__inactive">
-      <div class="dc__ong--hangup">
+      <div id="sc__ong--hangup--container" class="sc__inactive">
+      <div class="sc__ong--hangup">
         ${_icons__WEBPACK_IMPORTED_MODULE_1__.hangupIcon}
       </div>
-      <p class="dc__ong--hanguptext">Hang up</p>
+      <p class="sc__ong--hanguptext">Hang up</p>
       
     </div>
     </div>
     `
 
 
-  let callElem = document.getElementById("dc__callactions")
+  let callElem = document.getElementById("sc__callactions")
   if (!callElem) {
     throw new Error("Call element is not present. Call modal cannot render.")
   }
@@ -30103,20 +30116,20 @@ const renderOngoingScreen = ({ color, buttonTheme, bgColor }) => {
 
 // used for transition between connecting to ongoing call modal
 const showOngoingCallElements = () => {
-  let elem = document.getElementById("dc__mute_container")
-  let elem2 = document.getElementById("dc__ong--hangup--container")
+  let elem = document.getElementById("sc__mute_container")
+  let elem2 = document.getElementById("sc__ong--hangup--container")
   if (elem) {
-    elem.classList.remove('dc__inactive')
+    elem.classList.remove('sc__inactive')
   }
   if (elem2) {
-    elem2.classList.remove("dc__inactive")
+    elem2.classList.remove("sc__inactive")
   }
 }
 
 const setMuteInactive = () => {
-  let elem = document.getElementById("dc__mute_container")
+  let elem = document.getElementById("sc__mute_container")
   if (elem) {
-    elem.classList.add('dc__inactive')
+    elem.classList.add('sc__inactive')
   }
 }
 
@@ -30138,12 +30151,12 @@ const renderOutgoingCall = ({ color }) => {
   color = color || "#ffffff"
   let css = `
   
-  #dc__og--cancel--container {
+  #sc__og--cancel--container {
     color: ${color ? color : "#ffffff"};
     margin: 5px auto 5px; 5px;
   }
 
-  #dc__og--cancel {
+  #sc__og--cancel {
       min-width: 40px;
       min-height: 40px;
       border-radius: 50%;
@@ -30152,13 +30165,13 @@ const renderOutgoingCall = ({ color }) => {
       cursor: pointer;
     }
 
-    #dc__og--cancel>svg {
+    #sc__og--cancel>svg {
       position: absolute;
       top: 11px;
       left: 10px;
     }
 
-    .dc__og--actiontext {
+    .sc__og--actiontext {
       font-style: normal;
       font-weight: 600;
       font-size: 14px;
@@ -30169,22 +30182,22 @@ const renderOutgoingCall = ({ color }) => {
       color: inherit;
     }`
 
-  let html = `<div id="dc__og--cancel--container">
-        <div id="dc__og--cancel">
+  let html = `<div id="sc__og--cancel--container">
+        <div id="sc__og--cancel">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M1.79619 8.10012L1.93876 7.95771C1.94636 7.95012 1.95393 7.94255 1.96199 7.9345C2.66848 7.29757 3.55866 6.80807 4.76361 6.39382C6.84725 5.66603 9.06196 5.39375 11.258 5.59545C12.9029 5.70768 14.5144 6.10987 16.0181 6.78346C16.8443 7.12814 17.5862 7.64706 18.1932 8.3048C18.6466 8.83434 18.922 9.32035 18.8988 10.1108C18.8945 10.3517 18.8405 10.5892 18.7399 10.8083C18.6393 11.0275 18.4945 11.2235 18.3145 11.3841C18.1345 11.5446 17.9233 11.6661 17.6942 11.7411C17.4651 11.816 17.223 11.8427 16.9833 11.8195L14.1415 11.4749C13.718 11.4299 13.3266 11.2293 13.043 10.9121C12.7593 10.5949 12.6036 10.1836 12.606 9.75759L12.6075 9.0709C11.5559 8.94682 9.18117 8.73603 7.25235 9.07006C7.25411 9.30436 7.25646 9.56777 7.25916 9.78235C7.26372 10.2204 7.10207 10.6442 6.80682 10.9684C6.51157 11.2927 6.10462 11.4932 5.66799 11.5297L2.75636 11.8066C2.52292 11.8256 2.28817 11.7961 2.06692 11.7198C1.84566 11.6435 1.64273 11.5222 1.47085 11.3635C1.28972 11.2005 1.14358 11.0024 1.04115 10.7812C0.93872 10.56 0.88212 10.3204 0.874838 10.0765C0.837628 9.13161 1.21483 8.68084 1.79619 8.10012Z"
               fill="white" />
           </svg>
         </div>
-        <p class="dc__og--actiontext">Cancel</p>
+        <p class="sc__og--actiontext">Cancel</p>
       </div>`
 
-  let elem = document.getElementById('dc__callactions')
+  let elem = document.getElementById('sc__callactions')
   if (!elem) {
     throw new Error("Cannot find the required element for call dialog rendering")
   }
-  let cssId = 'dc--outgoing'
+  let cssId = 'sc--outgoing'
   if (!document.getElementById(cssId)) {
     let cssBlock = document.createElement('style')
     cssBlock.setAttribute('id', cssId)
@@ -34404,7 +34417,7 @@ module.exports = JSON.parse('{"name":"jssip","title":"JsSIP","description":"the 
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"clevertap-directcall","sideEffects":false,"version":"0.0.1","description":"A javaScript sdk for VOIP calling","main":"clevertap-directcall.module.js","scripts":{"formatModule":" sed -i \'\' \'s/! eslint-disable / eslint-disable /\' clevertap-directcall.module.js","formatUmd":" sed -i \'\' \'s/! eslint-disable / eslint-disable /\' clevertap-directcall.umd.js","build":"npm run module && npm run umd  && npm run formatModule && npm run formatUmd ","module":"webpack --config webpack.module.js","umd":"webpack --config webpack.umd.js","dev":"webpack --config webpack.dev.js && serve ","test":"jest"},"keywords":[],"author":"ayush.sinha@clevertap.com","license":"ISC","dependencies":{"jssip":"^3.2.15","socket.io-client":"^4.5.1"},"devDependencies":{"@babel/core":"^7.17.8","@babel/eslint-parser":"^7.17.0","@babel/plugin-proposal-class-properties":"^7.16.7","@babel/plugin-proposal-private-methods":"^7.16.11","@babel/plugin-transform-runtime":"^7.17.0","@babel/preset-env":"^7.16.11","@types/jest":"^27.4.1","babel-jest":"^27.5.1","eslint":"^8.10.0","eslint-webpack-plugin":"^3.1.1","jest":"^27.5.1","terser-webpack-plugin":"^5.3.1","webpack":"^5.70.0","webpack-bundle-analyzer":"^4.5.0","webpack-cli":"^4.9.2","webpack-dev-server":"^4.7.4","webpack-merge":"^5.8.0"}}');
+module.exports = JSON.parse('{"name":"clevertap-signedcall","sideEffects":false,"version":"0.0.1","description":"A javaScript sdk for VOIP calling","main":"clevertap-signedcall.module.js","scripts":{"build":"npm run module && npm run umd","module":"webpack --config webpack.module.js","umd":"webpack --config webpack.umd.js","dev":"webpack --config webpack.dev.js && serve ","test":"jest"},"keywords":[],"author":"ayush.sinha@clevertap.com","license":"ISC","dependencies":{"jssip":"^3.2.15","socket.io-client":"^4.5.1"},"devDependencies":{"@babel/core":"^7.17.8","@babel/eslint-parser":"^7.17.0","@babel/plugin-proposal-class-properties":"^7.16.7","@babel/plugin-proposal-private-methods":"^7.16.11","@babel/plugin-transform-runtime":"^7.17.0","@babel/preset-env":"^7.16.11","@types/jest":"^27.4.1","babel-jest":"^27.5.1","eslint":"^8.10.0","eslint-webpack-plugin":"^3.1.1","jest":"^27.5.1","terser-webpack-plugin":"^5.3.1","webpack":"^5.70.0","webpack-bundle-analyzer":"^4.5.0","webpack-cli":"^4.9.2","webpack-dev-server":"^4.7.4","webpack-merge":"^5.8.0"}}');
 
 /***/ })
 
@@ -34485,22 +34498,22 @@ var __webpack_exports__ = {};
   \**********************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "DirectCallClient": () => (/* binding */ DirectCallClient),
-/* harmony export */   "initDirectCall": () => (/* binding */ initDirectCall)
+/* harmony export */   "SignedCallClient": () => (/* binding */ SignedCallClient),
+/* harmony export */   "initSignedCall": () => (/* binding */ initSignedCall)
 /* harmony export */ });
-/* harmony import */ var _package_json__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../package.json */ "./package.json");
-/* harmony import */ var _modules_calling_callingSocket__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./modules/calling/callingSocket */ "./src/modules/calling/callingSocket.js");
+/* harmony import */ var _package_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../package.json */ "./package.json");
+/* harmony import */ var _modules_calling_callingSocket__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./modules/calling/callingSocket */ "./src/modules/calling/callingSocket.js");
 /* harmony import */ var _modules_callRinger__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./modules/callRinger */ "./src/modules/callRinger.js");
-/* harmony import */ var _modules_signalling_signallingSocket__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./modules/signalling/signallingSocket */ "./src/modules/signalling/signallingSocket.js");
-/* harmony import */ var _modules_signalling_signallingSocketEvents__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./modules/signalling/signallingSocketEvents */ "./src/modules/signalling/signallingSocketEvents.js");
-/* harmony import */ var _providers_auth__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./providers/auth */ "./src/providers/auth.js");
+/* harmony import */ var _modules_signalling_signallingSocket__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./modules/signalling/signallingSocket */ "./src/modules/signalling/signallingSocket.js");
+/* harmony import */ var _modules_signalling_signallingSocketEvents__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./modules/signalling/signallingSocketEvents */ "./src/modules/signalling/signallingSocketEvents.js");
+/* harmony import */ var _providers_auth__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./providers/auth */ "./src/providers/auth.js");
 /* harmony import */ var _store__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./store */ "./src/store/index.js");
-/* harmony import */ var _utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./utils/callmodal/callmodal */ "./src/utils/callmodal/callmodal.js");
-/* harmony import */ var _utils_callmodal_ongoing_screen__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./utils/callmodal/ongoing_screen */ "./src/utils/callmodal/ongoing_screen.js");
-/* harmony import */ var _utils_callmodal_outgoing_screen__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./utils/callmodal/outgoing_screen */ "./src/utils/callmodal/outgoing_screen.js");
+/* harmony import */ var _utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./utils/callmodal/callmodal */ "./src/utils/callmodal/callmodal.js");
+/* harmony import */ var _utils_callmodal_ongoing_screen__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./utils/callmodal/ongoing_screen */ "./src/utils/callmodal/ongoing_screen.js");
+/* harmony import */ var _utils_callmodal_outgoing_screen__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./utils/callmodal/outgoing_screen */ "./src/utils/callmodal/outgoing_screen.js");
 /* harmony import */ var _utils_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils/constants */ "./src/utils/constants.js");
-/* harmony import */ var _utils_logger__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./utils/logger */ "./src/utils/logger.js");
-/* harmony import */ var _utils_validators__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils/validators */ "./src/utils/validators.js");
+/* harmony import */ var _utils_logger__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./utils/logger */ "./src/utils/logger.js");
+/* harmony import */ var _utils_validators__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./utils/validators */ "./src/utils/validators.js");
 
 
 
@@ -34514,7 +34527,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-class DirectCallClient {
+class SignedCallClient {
   constructor(ctSdk) {
     this.stateLogger = _store__WEBPACK_IMPORTED_MODULE_0__["default"].stateLogger.bind(_store__WEBPACK_IMPORTED_MODULE_0__["default"])
     this.ctSdk = ctSdk
@@ -34528,21 +34541,21 @@ class DirectCallClient {
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].events.subscribe('hangup', this.hangup.bind(this))
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].events.subscribe("setOngoingCallEvents", this.renderInCall.bind(this))
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].events.subscribe('isMuted', (muted) => {
-      let muteElem = document.getElementById("dc__ong--mute")
-      let unmuteElem = document.getElementById("dc__ong--unmute")
+      let muteElem = document.getElementById("sc__ong--mute")
+      let unmuteElem = document.getElementById("sc__ong--unmute")
       if (muted === _utils_constants__WEBPACK_IMPORTED_MODULE_2__.MuteStates.MUTE) {
         if (muteElem) {
-          document.getElementById("dc__ong--mute").classList.add("dc__hide");
+          document.getElementById("sc__ong--mute").classList.add("sc__hide");
         }
         if (unmuteElem) {
-          document.getElementById("dc__ong--unmute").classList.remove("dc__hide");
+          document.getElementById("sc__ong--unmute").classList.remove("sc__hide");
         }
       } else {
         if (unmuteElem) {
-          document.getElementById("dc__ong--unmute").classList.add("dc__hide");
+          document.getElementById("sc__ong--unmute").classList.add("sc__hide");
         }
         if (muteElem) {
-          document.getElementById("dc__ong--mute").classList.remove("dc__hide");
+          document.getElementById("sc__ong--mute").classList.remove("sc__hide");
         }
       }
     })
@@ -34552,24 +34565,32 @@ class DirectCallClient {
   async signin(signinOptions) {
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setAccountDetails', signinOptions)
     let accountId = signinOptions.accountId
+    let sdkVersion = _package_json__WEBPACK_IMPORTED_MODULE_3__.version
     try {
       const { guid, ctAccountId, region } = this.getClevertapCredentials()
       signinOptions.guid = guid
       signinOptions.ctAccountId = ctAccountId
+      signinOptions.accountId = accountId
+      signinOptions.sdkVersion = sdkVersion
       let baseUrl = region.split('.')
       baseUrl.splice(1, 0, 'auth')
       baseUrl = baseUrl.join('.')
-      // baseUrl = 'https://' + baseUrl + '/api/v2/'
-      baseUrl = `https://sg1.auth.clevertap-prod.com/api/v2/`
+      baseUrl = 'https://' + baseUrl + '/api/v2/'
       _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setBaseUrl', baseUrl)
-      await (0,_providers_auth__WEBPACK_IMPORTED_MODULE_3__.getBaseUrl)(accountId, signinOptions.apikey, region)
-      let signinResponse = await (0,_providers_auth__WEBPACK_IMPORTED_MODULE_3__.signin)(signinOptions)
-      let jwtResponse = await (0,_providers_auth__WEBPACK_IMPORTED_MODULE_3__.getJwt)({ ...signinResponse, accountId })
-      _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setAuthResponse', jwtResponse)
-      this.sigsock = await (0,_modules_signalling_signallingSocket__WEBPACK_IMPORTED_MODULE_4__.connectSigSock)()
-      _modules_signalling_signallingSocketEvents__WEBPACK_IMPORTED_MODULE_5__.setupSigsockCustomEventHandlers.call(this)
+      delete signinOptions.clevertap
+      let signinResponse = await (0,_providers_auth__WEBPACK_IMPORTED_MODULE_4__.signin)(signinOptions)
+      _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setAuthResponse', signinResponse)
+      _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setSigsockToken', signinResponse.jwt)
+      this.sigsock = await (0,_modules_signalling_signallingSocket__WEBPACK_IMPORTED_MODULE_5__.connectSigSock)()
+      _modules_signalling_signallingSocketEvents__WEBPACK_IMPORTED_MODULE_6__.setupSigsockCustomEventHandlers.call(this)
       this.loginSuccesful = true
     } catch (err) {
+      // console.clear()
+      console.log("this is error ", err)
+      /**
+       * NOTE - test it out : error for sigsock unnauthoried
+       */
+      // this.signin()
       // if the error is unauthorized signin,invalid credentials or bad request inform the user and stop the flow
       if (err === 401 || err === 404 || err === 400) {
         let error = {}
@@ -34600,14 +34621,14 @@ class DirectCallClient {
     if (!this.ctSdk || !this.ctSdk.getCleverTapID) {
       let err = {
         code: "ERR_MISSING_CT_ID",
-        message: "cannot find clevertap id. Direct call sdk cannot initiate"
+        message: "cannot find clevertap id. Signed call sdk cannot initiate"
       }
       throw err
     }
     if (!this.ctSdk || !this.ctSdk.getAccountID) {
       let err = {
         code: "ERR_MISSING_CT_ACCOUNTID",
-        message: "cannot find clevertap account id. Direct call sdk cannot initiate"
+        message: "cannot find clevertap account id. Signed call sdk cannot initiate"
       }
       throw err
     }
@@ -34682,7 +34703,7 @@ class DirectCallClient {
       let data = {}
       try {
         // validate the cuid of callee
-        ;(0,_utils_validators__WEBPACK_IMPORTED_MODULE_6__.validateCuid)(callee)
+        ;(0,_utils_validators__WEBPACK_IMPORTED_MODULE_7__.validateCuid)(callee)
       } catch (err) {
         let error = {
           code: "ERR_INVALID_CALL_PARAMETERS",
@@ -34710,6 +34731,7 @@ class DirectCallClient {
         data.customMetadata.initiator_image = options.initiator_image
       }
       _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setIsInitiator', true)
+
       this.sigsock
         .makeCall(data)
         .then((callData) => {
@@ -34717,6 +34739,7 @@ class DirectCallClient {
           this.ctSdk.event.push(_utils_constants__WEBPACK_IMPORTED_MODULE_2__.EVENTS.DCOutgoing, {
             ct_account_id: this.ctSdk.getAccountID(), dc_account_id: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.accountId, guid: this.ctSdk.getCleverTapID(), call_id: callData.call, cuid: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.cuid, epoch: Date.now(), context: callData.context
           })
+          _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setCallsockToken', callData.callJwt)
           _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setCallId', callData.call)
           _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setCallsockHost', callData.host)
           this.sigsock.incomingcall = callData;
@@ -34727,8 +34750,8 @@ class DirectCallClient {
            */
           this.callRejector = reject
           this.callResolver = resolve
-          ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.renderCallModal)('Outgoing call', _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding, options && options.receiver_image ? options.receiver_image : null)
-          ;(0,_utils_callmodal_outgoing_screen__WEBPACK_IMPORTED_MODULE_8__.renderOutgoingCall)(_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding)
+          ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.renderCallModal)('Outgoing call', _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding, options && options.receiver_image ? options.receiver_image : null)
+          ;(0,_utils_callmodal_outgoing_screen__WEBPACK_IMPORTED_MODULE_9__.renderOutgoingCall)(_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding)
           _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('playRinger', true)
           // add cancel call event to call modal 
           try {
@@ -34738,18 +34761,22 @@ class DirectCallClient {
           }
           // cancels the call after specific time if the call has'nt been answered
           this.setupCancelTimer();
-          (0,_modules_calling_callingSocket__WEBPACK_IMPORTED_MODULE_9__.initCallSock)().catch(err => {
-            console.error(err)
-            // store.commit('setIsBusy', false)
+          try {
+            (0,_modules_calling_callingSocket__WEBPACK_IMPORTED_MODULE_10__.initCallSock)().catch(err => {
+              console.error(err)
+              // store.commit('setIsBusy', false)
+              _self.hangup()
+              throw err
+            });
+          } catch (err) {
             _self.hangup()
-            throw err
-          });
+          }
 
 
           // add call event handlers to the socket
           let _self = this;
           this.outgoingCallAcceptHandler = (data, respond) => {
-            (0,_utils_logger__WEBPACK_IMPORTED_MODULE_10__.logger)({
+            (0,_utils_logger__WEBPACK_IMPORTED_MODULE_11__.logger)({
               payload: {
                 data_callId: data.callId,
                 store_callId: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.callId
@@ -34766,7 +34793,7 @@ class DirectCallClient {
               if (_self.cancelTimer) {
                 clearTimeout(_self.cancelTimer);
               }
-              (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.changeCallModalTitle)("Connecting...")
+              (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.changeCallModalTitle)("Connecting...")
               // console.clear()
               if (_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.sipRegistered) {
                 _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('callVoip', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.callVoip)
@@ -34797,7 +34824,7 @@ class DirectCallClient {
                 clearTimeout(_self.cancelTimer);
               }
               _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('playRinger', false)
-              ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+              ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
               this.removeCallListners()
               _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setIsBusy', false)
               respond({ status: true });
@@ -34824,7 +34851,7 @@ class DirectCallClient {
                 clearTimeout(_self.cancelTimer);
               }
               _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('playRinger', false)
-              ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+              ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
               this.removeCallListners()
               _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setIsBusy', false)
               respond({ status: true });
@@ -34902,7 +34929,7 @@ class DirectCallClient {
       } else {
         console.error(err)
       }
-      (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+      (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
       /**
        * !NOTE - add reset state
        */
@@ -34917,8 +34944,8 @@ class DirectCallClient {
       clearTimeout(this.missTimer);
       // replace incoming call modal with ongoing call modal
       this.clearIncomingModal()
-      ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.changeCallModalTitle)("Ongoing call")
-      ;(0,_utils_callmodal_ongoing_screen__WEBPACK_IMPORTED_MODULE_11__.renderOngoingScreen)(_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding)
+      ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.changeCallModalTitle)("Ongoing call")
+      ;(0,_utils_callmodal_ongoing_screen__WEBPACK_IMPORTED_MODULE_12__.renderOngoingScreen)(_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.branding)
       this.renderInCall();
       // logger({ payload: store.state.isBusy, message: "inside answer emit" })
     }).catch(err => {
@@ -34945,7 +34972,7 @@ class DirectCallClient {
     if (this.missTimer) {
       clearTimeout(this.missTimer)
     }
-    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
     /**
      * if the user is already busy
      * declined is called from sigsock's incoming_call event
@@ -34972,7 +34999,7 @@ class DirectCallClient {
   miss() {
     // this.ringer.stop();
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('playRinger', false)
-    ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+    ;(0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
     if (this.missTimer) {
       clearTimeout(this.missTimer)
     }
@@ -35019,7 +35046,7 @@ class DirectCallClient {
     this.sigsock.socket.off("miss", this.outgoingCallMissHandler);
     this.sigsock.socket.off("decline", this.outgoingCallDeclineHandler);
     this.sigsock.socket.off("answer", this.outgoingCallAcceptHandler);
-    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
     this.resetState()
 
   }
@@ -35031,7 +35058,7 @@ class DirectCallClient {
     if (_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.playRinger) {
       _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('playRinger', false)
     }
-    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
     let eventPayload = {
       ct_account_id: this.ctSdk.getAccountID(), dc_account_id: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.accountId, guid: this.ctSdk.getCleverTapID(), call_id: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.callId, cuid: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.cuid, epoch: Date.now(), context: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.context, call_status: 'over'
     }
@@ -35039,6 +35066,11 @@ class DirectCallClient {
     // send sip and callsock modules a disconnect event
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('disconnectSip', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.disconnectSip)
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('disconnectCallsock', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.disconnectCallsock)
+    // removes hold_unhold css in case the user disconnects the call
+    let elem = document.getElementById('hold_unhold_css')
+    if (elem) {
+      elem.remove()
+    }
     try {
       if (this.callResolver) {
         this.callResolver("over");
@@ -35063,7 +35095,7 @@ class DirectCallClient {
    */
   setupCancelCall() {
     let _self = this
-    let cancelContainer = document.getElementById("dc__og--cancel--container");
+    let cancelContainer = document.getElementById("sc__og--cancel--container");
     if (!cancelContainer) {
       throw new Error("Cannot find cancel button in the document.")
     }
@@ -35077,7 +35109,7 @@ class DirectCallClient {
    * remove call modal when the call is disconnected
    */
   clearIncomingModal() {
-    let incallModal = document.getElementById("dc__callactions");
+    let incallModal = document.getElementById("sc__callactions");
     incallModal.innerHTML = null
   }
 
@@ -35091,20 +35123,20 @@ class DirectCallClient {
 
   addMuteUnmuteHandler() {
     let _self = this
-    document.getElementById("dc__ong--mute").addEventListener("click", function () {
+    document.getElementById("sc__ong--mute").addEventListener("click", function () {
       _self.toggleMuteUnmute()
     });
-    document.getElementById("dc__ong--unmute").addEventListener("click", function () {
+    document.getElementById("sc__ong--unmute").addEventListener("click", function () {
       _self.toggleMuteUnmute()
     });
   }
   renderInCall() {
     let _self = this;
-    let timeElem = document.getElementById('dc__sdk--timer')
-    timeElem.classList.remove('dc__hide')
+    let timeElem = document.getElementById('sc__sdk--timer')
+    timeElem.classList.remove('sc__hide')
     this.addMuteUnmuteHandler()
     document
-      .getElementById("dc__ong--hangup--container")
+      .getElementById("sc__ong--hangup--container")
       .addEventListener("click", function () {
         _self.hangup();
       });
@@ -35119,7 +35151,7 @@ class DirectCallClient {
 
   logout() {
     // in case of incoming / outgoing call
-    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_7__.clearCallModal)()
+    (0,_utils_callmodal_callmodal__WEBPACK_IMPORTED_MODULE_8__.clearCallModal)()
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('disconnectSip', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.disconnectSip)
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('disconnectCallsock', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.disconnectCallsock)
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('disconnectSigsock', !_store__WEBPACK_IMPORTED_MODULE_0__["default"].state.disconnectSigsock)
@@ -35130,7 +35162,7 @@ class DirectCallClient {
     // store.events.unsubscribe('isMuted')
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('mute', false)
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setIsMuted', _utils_constants__WEBPACK_IMPORTED_MODULE_2__.MuteStates.UNMUTE)
-    ;(0,_utils_logger__WEBPACK_IMPORTED_MODULE_10__.logger)({
+    ;(0,_utils_logger__WEBPACK_IMPORTED_MODULE_11__.logger)({
       payload: {
         mute: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.mute,
         isMuted: _store__WEBPACK_IMPORTED_MODULE_0__["default"].state.isMuted
@@ -35147,32 +35179,35 @@ class DirectCallClient {
 
 
 /**
- * Function to initialize the DirectCall SDK and get a DirectCallClient in
+ * Function to initialize the SignedCall SDK and get a SignedCallClient in
  * return.
  */
-async function initDirectCall(initOptions) {
-  if (!document.getElementById('dc-sdk')) {
+async function initSignedCall(initOptions) {
+  if (!document.getElementById('sc-sdk')) {
     let el = document.createElement('div')
-    el.setAttribute('id', 'dc-sdk')
+    el.setAttribute('id', 'sc-sdk')
     document.body.appendChild(el)
   }
 
   if (!initOptions.clevertap) {
     let err = {
       code: "ERR_MISSING_INITPARAMETERS",
-      message: "Clevertap sdk not found. Please ensure that clevertap sdk is initialized and its instance is passed to direct call sdk"
+      message: "Clevertap sdk not found. Please ensure that clevertap sdk is initialized and its instance is passed to Signed Call SDK"
     }
     throw err
   }
 
   if (initOptions.clevertap.setDCSDKVersion) {
-    initOptions.clevertap.setDCSDKVersion(_package_json__WEBPACK_IMPORTED_MODULE_12__.version)
+    initOptions.clevertap.setDCSDKVersion(_package_json__WEBPACK_IMPORTED_MODULE_3__.version)
   }
-  (0,_utils_validators__WEBPACK_IMPORTED_MODULE_6__.validateInitOptions)(initOptions)
+  (0,_utils_validators__WEBPACK_IMPORTED_MODULE_7__.validateInitOptions)(initOptions)
+  if (!initOptions.name) {
+    delete initOptions.name
+  }
   if (initOptions.ringtone) {
     _store__WEBPACK_IMPORTED_MODULE_0__["default"].commit('setRingtone', initOptions.ringtone)
   }
-  let client = new DirectCallClient(initOptions.clevertap)
+  let client = new SignedCallClient(initOptions.clevertap)
   await client.signin(initOptions)
   return client
 }
@@ -35183,4 +35218,4 @@ async function initDirectCall(initOptions) {
 /******/ })()
 ;
 });
-//# sourceMappingURL=directcall-sdk.umd.js.map
+//# sourceMappingURL=clevertap-signedcall.umd.js.map
