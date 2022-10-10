@@ -99,6 +99,7 @@
 
 <body>
   <h1 style="text-align: center; color: #e9a">Signed Call</h1>
+  <p style="text-align: center">This Demo used local build of clevertap sdk</p>
   <div class="flex">
     <form>
       <h2 style="text-align: center;">Caller</h2>
@@ -143,8 +144,8 @@
     var wzrk = document.createElement('script');
     wzrk.type = 'text/javascript';
     wzrk.async = true;
-    // wzrk.src = "https://cdn.jsdelivr.net/gh/CleverTap/clevertap-web-sdk@c2cbb454642baad50f66993d922c11e98b35455b/clevertap.min.js"
-    wzrk.src = "https://cdn.jsdelivr.net/gh/CleverTap/clevertap-web-sdk/clevertap.js"
+    wzrk.src = "./clevertap.js"
+    // wzrk.src = "https://cdn.jsdelivr.net/gh/CleverTap/clevertap-web-sdk/clevertap.js"
     var s = document.getElementsByTagName('script')[0];
     s.parentNode.insertBefore(wzrk, s);
   })();
